@@ -1,0 +1,9 @@
+fastapi==0.112.0
+uvicorn[standard]==0.23.2
+psycopg2-binary==2.9.7
+redis==5.0.1
+httpx==0.25.2
+pydantic==2.3.0
+redis==5.0.1
+httpx==0.25.2
+pydantic==2.3.0
