@@ -5,5 +5,5 @@ python-dotenv==1.0.0
 redis==5.0.1
 httpx==0.25.2
 pydantic==2.3.0
-httpx==0.25.2
-pydantic==2.3.0
+sqlalchemy>=2.0.0
+sqlmodel>=0.0.22

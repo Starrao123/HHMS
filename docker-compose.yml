@@ -23,6 +23,7 @@ services:
       dockerfile: Dockerfile
     container_name: user-service
     environment:
+      - ROOT_PATH=/users
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER}
@@ -50,6 +51,7 @@ services:
       dockerfile: Dockerfile
     container_name: patient-data-service
     environment:
+      - ROOT_PATH=/patient
       - DATABASE_URL=postgresql://${TIMESCALE_USER}:${TIMESCALE_PASSWORD}@${TIMESCALE_HOST}:${TIMESCALE_PORT}/${TIMESCALE_DB}
       - REDIS_HOST=${REDIS_HOST}
       - REDIS_PORT=${REDIS_PORT}
@@ -79,6 +81,7 @@ services:
       dockerfile: Dockerfile
     container_name: analytics-service
     environment:
+      - ROOT_PATH=/analytics
       - DATABASE_URL=postgresql://${ANALYTICS_DB_USER}:${ANALYTICS_DB_PASSWORD}@${ANALYTICS_DB_HOST}:${ANALYTICS_DB_PORT}/${ANALYTICS_DB_NAME}
       - REDIS_HOST=${REDIS_HOST}
       - REDIS_PORT=${REDIS_PORT}
@@ -108,6 +111,7 @@ services:
       dockerfile: Dockerfile
     container_name: alerts-service
     environment:
+      - ROOT_PATH=/alerts
       - REDIS_HOST=${REDIS_HOST}
       - REDIS_PORT=${REDIS_PORT}
       - TWILIO_API_KEY=${TWILIO_API_KEY}
@@ -190,8 +194,28 @@ services:
       retries: 5
       start_period: 10s
 
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_DEFAULT_EMAIL}
+      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_DEFAULT_PASSWORD}
+    ports:
+      - "5050:80"
+    depends_on:
+      postgres-user:
+        condition: service_healthy
+      postgres-analytics:
+        condition: service_healthy
+      timescale-data:
+        condition: service_healthy
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+    restart: unless-stopped
+
 volumes:
   user_db_data:
   patient_data_db:
   analytics_db_data:
-  redis-data:
+  redis-data: 
+  pgadmin-data:
