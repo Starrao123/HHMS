@@ -27,11 +27,11 @@ The HHMS addresses this problem by automatically monitoring patient vitals and a
     * Example Routes:
         * POST /analytics/run
 4. Alerting Service:
-    * Purpose: Handles alerting via APIs like Twilo
+    * Purpose: Handles alerting via APIs like Twilio
     * This exists as a logical, separate service because it is logically separate from data ingestion and analysis and should be able to scale separately.
     * Example Routes:
         * GET /alerts/{patient_id}
-        * POST /alerts/send/{patiend_id}
+        * POST /alerts/send/{patient_id}
 5. Redis:
     * Purpose: Serves as an event bus between data ingestion and analytics. Also serves as a cache for frequent queries.
 6. NGINX:
@@ -113,6 +113,22 @@ docker ps
 Shutdownt the system:
 ```bash
 docker-compose down
+
+## Environment Variables
+
+This project reads configuration from `.env` (loaded by Docker Compose). A working default is already baked into `docker-compose.yml`, but for production or custom setups you should create your own `.env`.
+
+Quick start:
+
+```bash
+cp .env.example .env
+# Edit .env as needed (DB passwords, Twilio, etc.)
+```
+
+Notes:
+- Set `TWILIO_TEST_MODE=true` to avoid sending real SMS while developing.
+- Database hosts (`postgres-user`, `timescale-data`, `postgres-analytics`, `postgres-alerts`) refer to container names on the Docker network.
+- If you provide `.env`, variables there override the defaults in `docker-compose.yml`.
 ```
 
 # Usage Instructions
@@ -183,6 +199,50 @@ Request (curl):
 curl http://localhost:8080/analytics/health
 ```
 
+## Code Quality
+
+This repository includes formatting and linting configuration to keep code consistent across services:
+
+- Formatting: Black and isort (configured in pyproject.toml)
+- Linting: Ruff
+
+Usage (local development):
+
+```bash
+pip install black isort ruff
+chmod +x scripts/format.sh scripts/lint.sh
+scripts/lint.sh   # run checks
+scripts/format.sh # auto-fix formatting/imports
+```
+
+These tools are for developer convenience and are not required inside the service containers.
+
+## End-to-End Test
+
+Demonstrate the full pipeline (users + patient data + analytics + alerts):
+
+1. Start services:
+
+```bash
+docker compose up -d
+```
+
+2. Run E2E script (uses the gateway at http://localhost:8080):
+
+```bash
+chmod +x scripts/e2e.sh
+scripts/e2e.sh
+```
+
+What it does:
+- Registers a doctor and a patient via `/users/register`
+- Links the patient to the doctor via `/users/relationships`
+- Sets a heart rate threshold via `/analytics/thresholds`
+- Ingests an abnormal reading via `/patient/{patient_id}`
+- Verifies an alert exists in `/alerts/{patient_id}` (Twilio in TEST mode)
+
+Expected output ends with: `PASS: Alert created (id=...) for patient ...`
+
 Healthy (200):
 ```json
 {
@@ -247,6 +307,27 @@ Unhealthy (503):
 
 ---
 
+#### Sending Alerts
+
+Two endpoints are available:
+
+- Primary: `POST http://localhost:8080/alerts/notifications/send`
+    Body:
+    `{ "patient_id": "<uuid>", "message": "...", "severity": "info|warning|critical" }`
+
+- Compatibility: `POST http://localhost:8080/alerts/send/{patient_id}`
+    Body requires only `message` and `severity`; `patient_id` is taken from the path.
+
+Twilio configuration for real SMS:
+
+- `TWILIO_ACCOUNT_SID`
+- `TWILIO_AUTH_TOKEN`
+- `TWILIO_FROM_NUMBER`
+
+Local testing (no real SMS):
+
+- Set `TWILIO_TEST_MODE=true` to mark alerts as SENT with a mock provider ID.
+
 ### Patient Data Service
 
 - Path (internal): `GET http://patient-data-service:8000/health`
@@ -292,17 +373,53 @@ Unhealthy (503):
 
 # Testing
 
-Currently, automated testing has not been implemented in this project; however, there are still methods to make sure that the application is running.
-
-Run the following commands to start up, view the status of, and shut down the various services in the project. Make sure that all of the services are running properly.
+Use the provided smoke script to verify core routes via nginx.
 
 ```bash
-docker-compose up
-docker ps
-docker-compose down
+docker compose up -d --build
+bash scripts/smoke.sh
 ```
 
-Also feel free to call the health check endpoints.
+The script checks:
+- Gateway and service health endpoints
+- User registration (accepts `name` alias)
+- Patient latest before/after ingestion
+- Analytics run trigger
+- Alerts send (compat route) and history
+
+### Twilio & Anomaly Detection Test
+
+Run an integrated test that verifies Twilio notifications (test mode) and analytics anomaly detection end-to-end:
+
+```bash
+docker compose up -d --build
+bash scripts/test_alerts_anomalies.sh
+```
+
+What it does:
+- Health checks for all services
+- Registers a patient
+- Sends an alert via `alerts/notifications/send` (uses `TWILIO_TEST_MODE` to mark as `sent`)
+- Creates a heart_rate threshold, ingests violating vitals, and verifies anomalies are recorded
+- Confirms alerts history contains the anomaly-triggered alert
+
+### Real SMS Test
+
+To send a real SMS to a specific phone when an anomaly occurs, configure Twilio and run:
+
+```bash
+# 1) Set Twilio credentials in .env and disable test mode
+sed -i '' 's/TWILIO_TEST_MODE=.*/TWILIO_TEST_MODE=false/' .env
+docker compose up -d
+
+# 2) Run the real SMS test (pass your phone in E.164 format)
+bash scripts/test_real_sms.sh +15555550123 "Hello from HHMS"
+```
+
+Requirements:
+- `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_FROM_NUMBER` must be valid.
+- Phone numbers must use E.164 format (e.g., `+15555550123`).
+- The script registers a patient with your phone, triggers an anomaly, and checks alerts history.
 
 # Project Structure
 

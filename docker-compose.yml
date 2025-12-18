@@ -21,17 +21,16 @@ services:
     build:
       context: ./user-service
       dockerfile: Dockerfile
-    container_name: user-service
     environment:
       - ROOT_PATH=/users
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_HOST=${POSTGRES_HOST}
-      - POSTGRES_PORT=${POSTGRES_PORT}
-      - REDIS_HOST=${REDIS_HOST}
-      - REDIS_PORT=${REDIS_PORT}
+      - POSTGRES_DB=${POSTGRES_DB:-users}
+      - POSTGRES_USER=${POSTGRES_USER:-user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
+      - POSTGRES_HOST=${POSTGRES_HOST:-postgres-user}
+      - POSTGRES_PORT=${POSTGRES_PORT:-5432}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@${POSTGRES_HOST:-postgres-user}:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-users}
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
     depends_on:
       postgres-user:
         condition: service_healthy
@@ -49,17 +48,19 @@ services:
     build:
       context: ./patient-data-service
       dockerfile: Dockerfile
-    container_name: patient-data-service
+    deploy:
+      mode: replicated
+      replicas: 3
     environment:
       - ROOT_PATH=/patient
-      - DATABASE_URL=postgresql://${TIMESCALE_USER}:${TIMESCALE_PASSWORD}@${TIMESCALE_HOST}:${TIMESCALE_PORT}/${TIMESCALE_DB}
-      - REDIS_HOST=${REDIS_HOST}
-      - REDIS_PORT=${REDIS_PORT}
-      - TIMESCALE_DB=${TIMESCALE_DB}
-      - TIMESCALE_USER=${TIMESCALE_USER}
-      - TIMESCALE_PASSWORD=${TIMESCALE_PASSWORD}
-      - TIMESCALE_HOST=${TIMESCALE_HOST}
-      - TIMESCALE_PORT=${TIMESCALE_PORT}
+      - TIMESCALE_DB=${TIMESCALE_DB:-patientdata}
+      - TIMESCALE_USER=${TIMESCALE_USER:-tsuser}
+      - TIMESCALE_PASSWORD=${TIMESCALE_PASSWORD:-tspassword}
+      - TIMESCALE_HOST=${TIMESCALE_HOST:-timescale-data}
+      - TIMESCALE_PORT=${TIMESCALE_PORT:-5432}
+      - DATABASE_URL=postgresql://${TIMESCALE_USER:-tsuser}:${TIMESCALE_PASSWORD:-tspassword}@${TIMESCALE_HOST:-timescale-data}:${TIMESCALE_PORT:-5432}/${TIMESCALE_DB:-patientdata}
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
     depends_on:
       timescale-data:
         condition: service_healthy
@@ -79,17 +80,16 @@ services:
     build:
       context: ./analytics-service
       dockerfile: Dockerfile
-    container_name: analytics-service
     environment:
       - ROOT_PATH=/analytics
-      - DATABASE_URL=postgresql://${ANALYTICS_DB_USER}:${ANALYTICS_DB_PASSWORD}@${ANALYTICS_DB_HOST}:${ANALYTICS_DB_PORT}/${ANALYTICS_DB_NAME}
-      - REDIS_HOST=${REDIS_HOST}
-      - REDIS_PORT=${REDIS_PORT}
-      - ANALYTICS_DB_NAME=${ANALYTICS_DB_NAME}
-      - ANALYTICS_DB_USER=${ANALYTICS_DB_USER}
-      - ANALYTICS_DB_PASSWORD=${ANALYTICS_DB_PASSWORD}
-      - ANALYTICS_DB_HOST=${ANALYTICS_DB_HOST}
-      - ANALYTICS_DB_PORT=${ANALYTICS_DB_PORT}
+      - ANALYTICS_DB_NAME=${ANALYTICS_DB_NAME:-analytics}
+      - ANALYTICS_DB_USER=${ANALYTICS_DB_USER:-analytics}
+      - ANALYTICS_DB_PASSWORD=${ANALYTICS_DB_PASSWORD:-analytics}
+      - ANALYTICS_DB_HOST=${ANALYTICS_DB_HOST:-postgres-analytics}
+      - ANALYTICS_DB_PORT=${ANALYTICS_DB_PORT:-5432}
+      - DATABASE_URL=postgresql://${ANALYTICS_DB_USER:-analytics}:${ANALYTICS_DB_PASSWORD:-analytics}@${ANALYTICS_DB_HOST:-postgres-analytics}:${ANALYTICS_DB_PORT:-5432}/${ANALYTICS_DB_NAME:-analytics}
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
     depends_on:
       postgres-analytics:
         condition: service_healthy
@@ -109,12 +109,22 @@ services:
     build:
       context: ./alerts-service
       dockerfile: Dockerfile
-    container_name: alerts-service
     environment:
       - ROOT_PATH=/alerts
-      - REDIS_HOST=${REDIS_HOST}
-      - REDIS_PORT=${REDIS_PORT}
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - TWILIO_TEST_MODE=${TWILIO_TEST_MODE:-true}
       - TWILIO_API_KEY=${TWILIO_API_KEY}
+      - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID}
+      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN}
+      - TWILIO_FROM_NUMBER=${TWILIO_FROM_NUMBER}
+      - TEST_PHONE_NUMBER=${TEST_PHONE_NUMBER}
+      - ALERTS_DB_NAME=${ALERTS_DB_NAME:-alerts}
+      - ALERTS_DB_USER=${ALERTS_DB_USER:-alerts}
+      - ALERTS_DB_PASSWORD=${ALERTS_DB_PASSWORD:-alerts}
+      - ALERTS_DB_HOST=${ALERTS_DB_HOST:-postgres-alerts}
+      - ALERTS_DB_PORT=${ALERTS_DB_PORT:-5432}
+      - DATABASE_URL=postgresql://${ALERTS_DB_USER:-alerts}:${ALERTS_DB_PASSWORD:-alerts}@${ALERTS_DB_HOST:-postgres-alerts}:${ALERTS_DB_PORT:-5432}/${ALERTS_DB_NAME:-alerts}
     depends_on:
       redis:
         condition: service_healthy
@@ -130,11 +140,10 @@ services:
 
   postgres-user:
     image: postgres:15
-    container_name: postgres-user
     environment:
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER:-user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
+      - POSTGRES_DB=${POSTGRES_DB:-users}
     volumes:
       - user_db_data:/var/lib/postgresql/data
     restart: unless-stopped
@@ -147,11 +156,10 @@ services:
 
   timescale-data:
     image: timescale/timescaledb:latest-pg15
-    container_name: timescale-data
     environment:
-      - POSTGRES_USER=${TIMESCALE_USER}
-      - POSTGRES_PASSWORD=${TIMESCALE_PASSWORD}
-      - POSTGRES_DB=${TIMESCALE_DB}
+      - POSTGRES_USER=${TIMESCALE_USER:-tsuser}
+      - POSTGRES_PASSWORD=${TIMESCALE_PASSWORD:-tspassword}
+      - POSTGRES_DB=${TIMESCALE_DB:-patientdata}
     volumes:
       - patient_data_db:/var/lib/postgresql/data
     restart: unless-stopped
@@ -164,11 +172,10 @@ services:
 
   postgres-analytics:
     image: postgres:15
-    container_name: postgres-analytics
     environment:
-      - POSTGRES_USER=${ANALYTICS_DB_USER}
-      - POSTGRES_PASSWORD=${ANALYTICS_DB_PASSWORD}
-      - POSTGRES_DB=${ANALYTICS_DB_NAME}
+      - POSTGRES_USER=${ANALYTICS_DB_USER:-analytics}
+      - POSTGRES_PASSWORD=${ANALYTICS_DB_PASSWORD:-analytics}
+      - POSTGRES_DB=${ANALYTICS_DB_NAME:-analytics}
     volumes:
       - analytics_db_data:/var/lib/postgresql/data
     restart: unless-stopped
@@ -179,6 +186,21 @@ services:
       retries: 5
       start_period: 10s
 
+  postgres-alerts:
+    image: postgres:15
+    environment:
+      - POSTGRES_USER=${ALERTS_DB_USER:-alerts}
+      - POSTGRES_PASSWORD=${ALERTS_DB_PASSWORD:-alerts}
+      - POSTGRES_DB=${ALERTS_DB_NAME:-alerts}
+    volumes:
+      - alerts_db_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${ALERTS_DB_USER} -d ${ALERTS_DB_NAME} || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
   redis:
     image: redis:7-alpine
     container_name: redis
@@ -196,10 +218,9 @@ services:
 
   pgadmin:
     image: dpage/pgadmin4
-    container_name: pgadmin
     environment:
-      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_DEFAULT_EMAIL}
-      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_DEFAULT_PASSWORD}
+      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_DEFAULT_EMAIL:-admin@example.com}
+      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_DEFAULT_PASSWORD:-admin}
     ports:
       - "5050:80"
     depends_on:
@@ -217,5 +238,6 @@ volumes:
   user_db_data:
   patient_data_db:
   analytics_db_data:
+  alerts_db_data:
   redis-data: 
   pgadmin-data:
